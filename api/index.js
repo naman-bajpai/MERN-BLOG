@@ -4,52 +4,58 @@ const mongoose = require("mongoose");
 const User = require('./models/User');
 const Post = require('./models/Post');
 const bcrypt = require('bcryptjs');
-const app = express();
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const uploadMiddleware = multer({ dest: 'uploads/' });
 const fs = require('fs');
 
-const salt = bcrypt.genSaltSync(10);
-const secret = 'asdfe45we45w345wegw345werjktjwertkj';
+const saltRounds = 10;
+const secret = 'mfdr334nasd'; // Replace with a strong secret key; consider using environment variables.
 
-app.use(cors({credentials:true,origin:'http://localhost:3000'}));
+const app = express();
+
+app.use(cors({ credentials: true, origin: 'http://localhost:3000' }));
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(__dirname + '/uploads'));
 
-mongoose.connect('mongodb+srv://blog:RD8paskYC8Ayj09u@cluster0.pflplid.mongodb.net/?retryWrites=true&w=majority');
+mongoose.connect('mongodb+srv://namanbajpai4:wv9MHxJBQgtKogZx@cluster0.poiugn1.mongodb.net/?retryWrites=true&w=majority', { useNewUrlParser: true,
+useUnifiedTopology: true,
+useCreateIndex: true,});
 
-app.post('/register', async (req,res) => {
-  const {username,password} = req.body;
-  try{
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
     const userDoc = await User.create({
       username,
-      password:bcrypt.hashSync(password,salt),
+      password: hashedPassword,
     });
     res.json(userDoc);
-  } catch(e) {
-    console.log(e);
-    res.status(400).json(e);
+  } catch (e) {
+    console.error(e);
+    res.status(400).json({ error: 'Registration failed' });
   }
 });
 
-app.post('/login', async (req,res) => {
-  const {username,password} = req.body;
-  const userDoc = await User.findOne({username});
-  const passOk = bcrypt.compareSync(password, userDoc.password);
-  if (passOk) {
-    // logged in
-    jwt.sign({username,id:userDoc._id}, secret, {}, (err,token) => {
-      if (err) throw err;
-      res.cookie('token', token).json({
-        id:userDoc._id,
-        username,
-      });
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const userDoc = await User.findOne({ username });
+
+    if (!userDoc || !bcrypt.compareSync(password, userDoc.password)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ username, id: userDoc._id }, secret, { expiresIn: '1h' });
+    res.cookie('token', token, { httpOnly: true }).json({
+      id: userDoc._id,
+      username,
     });
-  } else {
-    res.status(400).json('wrong credentials');
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -134,5 +140,6 @@ app.get('/post/:id', async (req, res) => {
   res.json(postDoc);
 })
 
-app.listen(4000);
-//
+app.listen(4000, () => {
+  console.log('Server is running on port 4000');
+});
